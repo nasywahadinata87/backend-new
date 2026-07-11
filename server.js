@@ -27,13 +27,8 @@ let realtimeData = {
     pf: 0
 };
 
-// =========================================================
-// TIMER DATA LOGGER
-// =========================================================
-
-const SAVE_INTERVAL = 5 * 60 * 1000; // 5 menit
-
-let lastSave = Date.now();
+// Menandakan apakah sudah pernah menerima data dari ESP32
+let dataReceived = false;
 
 // =========================================================
 // INSERT DATA DARI ESP32
@@ -65,41 +60,8 @@ app.post("/insert_data", async (req, res) => {
             pf: Number(pf)
         };
 
-        // =========================================
-        // SIMPAN KE DATABASE SETIAP 5 MENIT
-        // =========================================
-
-        const now = Date.now();
-
-        if ((now - lastSave) >= SAVE_INTERVAL) {
-
-            const sql = `
-                INSERT INTO log_sensor
-                (
-                    mode_sistem,
-                    sumber_aktif,
-                    tegangan,
-                    arus,
-                    soc,
-                    pf
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-            `;
-
-            await db.execute(sql, [
-                mode,
-                sumber,
-                tegangan,
-                arus,
-                soc,
-                pf
-            ]);
-
-            lastSave = now;
-
-            console.log("✅ Data Logger tersimpan ke database");
-
-        }
+        dataReceived = true;
+        console.log("📡 Data Realtime :", realtimeData);
 
         res.send("OK");
 
@@ -112,6 +74,53 @@ app.post("/insert_data", async (req, res) => {
     }
 
 });
+
+// =========================================================
+// SIMPAN DATA LOGGER SETIAP 5 MENIT
+// =========================================================
+
+const SAVE_INTERVAL = 5 * 60 * 1000;
+
+setInterval(async () => {
+
+    // Belum ada data dari ESP32
+    if (!dataReceived) {
+        return;
+    }
+
+    try {
+
+        const sql = `
+            INSERT INTO log_sensor
+            (
+                mode_sistem,
+                sumber_aktif,
+                tegangan,
+                arus,
+                soc,
+                pf
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+        `;
+
+        await db.execute(sql, [
+            realtimeData.mode,
+            realtimeData.sumber,
+            realtimeData.tegangan,
+            realtimeData.arus,
+            realtimeData.soc,
+            realtimeData.pf
+        ]);
+
+        console.log("✅ Data Logger tersimpan ke database");
+
+    } catch (err) {
+
+        console.error("❌ Gagal menyimpan data logger:", err.message);
+
+    }
+
+}, SAVE_INTERVAL);
 
 // =========================================================
 // DATA REALTIME
@@ -162,9 +171,9 @@ app.get("/", (req, res) => {
 
 });
 
-// =====================================
+// =========================================================
 // EXPORT CSV
-// =====================================
+// =========================================================
 
 app.get("/export_csv", async (req, res) => {
 
