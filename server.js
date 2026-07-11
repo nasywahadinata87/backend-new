@@ -5,7 +5,6 @@ const cors = require("cors");
 const db = require("./db");
 
 const app = express();
-app.use(cors());
 
 const PORT = process.env.PORT || 3000;
 
@@ -13,6 +12,7 @@ const PORT = process.env.PORT || 3000;
 // MIDDLEWARE
 // =========================================================
 
+app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
@@ -29,14 +29,11 @@ let realtimeData = {
     pf: 0
 };
 
-// Menandakan apakah sudah pernah menerima data dari ESP32
-let dataReceived = false;
-
 // =========================================================
-// INSERT DATA DARI ESP32
+// POST DATA REALTIME DARI ESP32 (1 DETIK)
 // =========================================================
 
-app.post("/insert_data", async (req, res) => {
+app.post("/realtime", (req, res) => {
 
     try {
 
@@ -49,10 +46,6 @@ app.post("/insert_data", async (req, res) => {
             pf
         } = req.body;
 
-        // =========================================
-        // UPDATE DATA REALTIME
-        // =========================================
-
         realtimeData = {
             mode,
             sumber,
@@ -62,7 +55,6 @@ app.post("/insert_data", async (req, res) => {
             pf: Number(pf)
         };
 
-        dataReceived = true;
         console.log("📡 Data Realtime :", realtimeData);
 
         res.send("OK");
@@ -78,19 +70,21 @@ app.post("/insert_data", async (req, res) => {
 });
 
 // =========================================================
-// SIMPAN DATA LOGGER SETIAP 5 MENIT
+// POST DATA LOGGER DARI ESP32 (5 MENIT)
 // =========================================================
 
-const SAVE_INTERVAL = 5 * 60 * 1000;
-
-setInterval(async () => {
-
-    // Belum ada data dari ESP32
-    if (!dataReceived) {
-        return;
-    }
+app.post("/logger", async (req, res) => {
 
     try {
+
+        const {
+            mode,
+            sumber,
+            tegangan,
+            arus,
+            soc,
+            pf
+        } = req.body;
 
         const sql = `
             INSERT INTO log_sensor
@@ -106,26 +100,30 @@ setInterval(async () => {
         `;
 
         await db.execute(sql, [
-            realtimeData.mode,
-            realtimeData.sumber,
-            realtimeData.tegangan,
-            realtimeData.arus,
-            realtimeData.soc,
-            realtimeData.pf
+            mode,
+            sumber,
+            Number(tegangan),
+            Number(arus),
+            Number(soc),
+            Number(pf)
         ]);
 
-        console.log("✅ Data Logger tersimpan ke database");
+        console.log("✅ Data Logger tersimpan");
+
+        res.send("OK");
 
     } catch (err) {
 
-        console.error("❌ Gagal menyimpan data logger:", err.message);
+        console.error(err);
+
+        res.status(500).send(err.message);
 
     }
 
-}, SAVE_INTERVAL);
+});
 
 // =========================================================
-// DATA REALTIME
+// GET DATA REALTIME
 // =========================================================
 
 app.get("/realtime", (req, res) => {
@@ -135,7 +133,7 @@ app.get("/realtime", (req, res) => {
 });
 
 // =========================================================
-// RIWAYAT LOG
+// GET DATA LOGGER
 // =========================================================
 
 app.get("/logs", async (req, res) => {
@@ -164,16 +162,6 @@ app.get("/logs", async (req, res) => {
 });
 
 // =========================================================
-// TEST BACKEND
-// =========================================================
-
-app.get("/", (req, res) => {
-
-    res.send("Backend ATS Running");
-
-});
-
-// =========================================================
 // EXPORT CSV
 // =========================================================
 
@@ -197,7 +185,7 @@ app.get("/export_csv", async (req, res) => {
         let csv =
             "Waktu,Mode Sistem,Sumber Aktif,Tegangan (V),Arus (A),SoC (%),Power Factor\n";
 
-       rows.forEach(row => {
+        rows.forEach(row => {
 
             const waktuWIB = new Date(row.waktu).toLocaleString("id-ID", {
                 timeZone: "Asia/Jakarta",
@@ -237,6 +225,16 @@ app.get("/export_csv", async (req, res) => {
         res.status(500).send("Gagal export CSV");
 
     }
+
+});
+
+// =========================================================
+// TEST BACKEND
+// =========================================================
+
+app.get("/", (req, res) => {
+
+    res.send("Backend ATS Running");
 
 });
 
