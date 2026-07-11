@@ -197,10 +197,21 @@ app.get("/export_csv", async (req, res) => {
         let csv =
             "Waktu,Mode Sistem,Sumber Aktif,Tegangan (V),Arus (A),SoC (%),Power Factor\n";
 
-        rows.forEach(row => {
+       rows.forEach(row => {
+
+            const waktuWIB = new Date(row.waktu).toLocaleString("id-ID", {
+                timeZone: "Asia/Jakarta",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false
+            });
 
             csv +=
-                `${row.waktu},` +
+                `${waktuWIB},` +
                 `${row.mode_sistem},` +
                 `${row.sumber_aktif},` +
                 `${row.tegangan},` +
